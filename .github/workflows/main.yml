@@ -1,59 +1,29 @@
-name: Windows RDP via Ngrok # ওয়ার্কফ্লোর নাম
-
-on:
-  workflow_dispatch: # এটি আপনাকে GitHub Actions ট্যাবে গিয়ে ম্যানুয়ালি এই ওয়ার্কফ্লোটি চালানোর অনুমতি দেবে।
-
+yaml
+name: RDP via Ngrok
+on: workflow_dispatch
 jobs:
   build:
-    runs-on: windows-latest # Windows অপারেটিং সিস্টেমের সর্বশেষ রানার ব্যবহার করা হয়েছে। এটিই আপনার রিমোট ডেস্কটপ VM।
-    timeout-minutes: 360 # এই জবটি সর্বোচ্চ 6 ঘন্টা (360 মিনিট) পর্যন্ত চলবে। এরপর GitHub স্বয়ংক্রিয়ভাবে এটি বন্ধ করে দেবে।
-
+    runs-on: windows-latest
     steps:
-      - name: Ngrok ডাউনলোড করুন
-        # Ngrok ক্লায়েন্ট টুল ডাউনলোড করা হচ্ছে। এটি একটি টানেল তৈরি করবে যাতে আপনি রিমোট ডেস্কটপে কানেক্ট করতে পারেন।
-        run: Invoke-WebRequest https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-windows-amd64.zip -OutFile ngrok.zip
+    - name: Set up job
+      run: echo "Setting up..."
+    - name: Ngrok ডাউনলোড ও আনজিপ করুন
+      run: |
+        Invoke-WebRequest -Uri "https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-stable-windows-amd64.zip" -OutFile "ngrok.zip"
+        Expand-Archive -Path "ngrok.zip" -DestinationPath "."
 
-      - name: Ngrok আনজিপ করুন
-        # ডাউনলোড করা Ngrok জিপ ফাইলটি আনজিপ করা হচ্ছে।
-        run: Expand-Archive ngrok.zip -DestinationPath .
+    - name: Ngrok অথেন্টিকেশন
+      run: .\ngrok.exe authtoken Env:NGROK_AUTH_TOKEN
+      env:
+        NGROK_AUTH_TOKEN:{{ secrets.NGROK_AUTH_TOKEN }}
 
-      - name: Ngrok অথেন্টিকেশন
-        # আপনার Ngrok Auth Token ব্যবহার করে Ngrok ক্লায়েন্টকে অথেন্টিকেট করা হচ্ছে।
-        # NGROK_AUTH_TOKEN আপনার GitHub Repository Secrets-এ সেট করা থাকতে হবে।
-        run: .\ngrok\ngrok.exe authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
-        # এখানে 'env' ব্লক প্রয়োজন নেই কারণ 'authtoken' কমান্ড সরাসরি টোকেন নেয়।
+    - name: RDP টানেল চালু করুন
+      run: Start-Process -NoNewWindow -FilePath ".\ngrok.exe" -ArgumentList "tcp 3389"
 
-      - name: RDP টানেল চালু করুন
-        # Ngrok ব্যবহার করে RDP পোর্ট (3389) এর জন্য একটি TCP টানেল চালু করা হচ্ছে।
-        # 'Start-Process' ব্যবহার করে এটি ব্যাকগ্রাউন্ডে চলবে।
-        run: Start-Process -NoNewWindow -FilePath .\ngrok\ngrok.exe -ArgumentList 'tcp 3389'
+    - name: ইউজারনেম ও পাসওয়ার্ড দেখান
+      run: |
+        net user runneradmin
+        echo "IP:PORT Ngrok থেকে নিন এবং Remote Desktop অ্যাপে ব্যবহার করুন"
 
-      - name: Ngrok টানেল URL পান
-        # Ngrok টানেল চালু হওয়ার পর, এর পাবলিক URLটি লগ থেকে বের করে আউটপুট করা হচ্ছে।
-        # এই URLটি ব্যবহার করে আপনি আপনার রিমোট ডেস্কটপে কানেক্ট করবেন।
-        id: get_ngrok_url # এই স্টেপের আইডি, যা থেকে আউটপুট নেওয়া হবে।
-        run: |
-          # Ngrok চালু হওয়ার জন্য কিছুক্ষণ অপেক্ষা করুন।
-          Start-Sleep -Seconds 10
-          # Ngrok লগ ফাইল থেকে টানেল URL বের করুন।
-          $ngrokLog = Get-Content (Get-ChildItem -Path $env:TEMP -Filter "*.log" | Select-Object -First 1).FullName
-          $ngrokUrl = ($ngrokLog | Select-String -Pattern 'url=(tcp://\S+)' | ForEach-Object {$_.Matches.Groups[1].Value})[0]
-          echo "Ngrok Tunnel URL: $ngrokUrl"
-          echo "::set-output name=url::$ngrokUrl"
-
-      - name: ইউজারনেম ও পাসওয়ার্ড সেটআপ
-        # রিমোট ডেস্কটপে লগইন করার জন্য একটি নতুন ইউজার (runneradmin) তৈরি করা হচ্ছে।
-        # পাসওয়ার্ডটি GitHub Secrets থেকে নেওয়া হচ্ছে, যা নিরাপত্তার জন্য অত্যন্ত গুরুত্বপূর্ণ।
-        run: |
-          net user runneradmin ${{ secrets.RDP_PASSWORD }} /add
-          net localgroup administrators runneradmin /add
-        env:
-          # RDP_PASSWORD আপনার GitHub Repository Secrets-এ সেট করা থাকতে হবে।
-          RDP_PASSWORD: ${{ secrets.RDP_PASSWORD }}
-
-      - name: ৬ ঘণ্টা পর্যন্ত সক্রিয় রাখুন
-        # এই স্টেপটি জবটিকে 6 ঘন্টা ধরে সচল রাখবে যাতে আপনি RDP ব্যবহার করতে পারেন।
-        run: |
-          echo "RDP is now active. Connect using the Ngrok Tunnel URL provided above."
-          echo "This RDP session will remain active for approximately 6 hours."
-          Start-Sleep -Seconds 21600 # 6 ঘন্টা = 21600 সেকেন্ড
+    - name: ৬ ঘণ্টা অপেক্ষা করুন
+      run: Start-Sleep -Seconds 21600
