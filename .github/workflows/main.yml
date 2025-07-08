@@ -1,0 +1,59 @@
+name: NoMachine RDP with Ngrok
+
+on:
+  workflow_dispatch: # এটি আপনাকে ম্যানুয়ালি ওয়ার্কফ্লো চালানোর অনুমতি দেবে
+
+jobs:
+  build:
+    runs-on: ubuntu-latest # উবুন্টু লেটেস্ট রানার ব্যবহার করা হয়েছে
+    timeout-minutes: 360 # সর্বোচ্চ ৬ ঘণ্টা (360 মিনিট) রান করবে
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install NoMachine
+        run: |
+          sudo apt update
+          sudo apt install -y curl
+          wget https://download.nomachine.com/download/8.12/Linux/nomachine_8.12.3_1_amd64.deb -O nomachine.deb
+          sudo dpkg -i nomachine.deb || sudo apt --fix-broken install -y
+          sudo /etc/NX/nxserver --startup
+          echo "NoMachine installed and started successfully."
+
+      - name: Set up User and Password for NoMachine
+        run: |
+          # NoMachine-এর জন্য একটি নতুন ইউজার তৈরি করুন
+          sudo adduser --disabled-password --gecos "" nxuser
+          echo "nxuser:your_strong_password" | sudo chpasswd
+          # আপনার ইচ্ছামত 'your_strong_password' পরিবর্তন করুন।
+          # এটি একটি সেনসিটিভ তথ্য, তাই সিক্রেটস ব্যবহার করা ভালো।
+          # উদাহরণের জন্য এখানে সরাসরি লেখা হয়েছে।
+
+      - name: Download and install Ngrok
+        run: |
+          curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo tee /etc/apt/trusted.gpg.d/ngrok.asc >/dev/null
+          echo "deb https://ngrok-agent.s3.amazonaws.com/apt focal main" | sudo tee /etc/apt/sources.list.d/ngrok.list
+          sudo apt update
+          sudo apt install ngrok -y
+
+      - name: Authenticate Ngrok
+        run: |
+          ngrok authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
+        env:
+          NGROK_AUTH_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }} # আপনার Ngrok অথ টোকেন গিটহাব সিক্রেটসে রাখুন
+
+      - name: Start Ngrok Tunnel
+        run: |
+          nohup ngrok tcp 4000 --log=stdout > ngrok.log &
+          sleep 10 # ngrok চালু হওয়ার জন্য একটু সময় দিন
+          NGROK_URL=$(grep -o 'tcp://[^ ]*' ngrok.log | head -1)
+          echo "NoMachine RDP is available at: $NGROK_URL"
+          echo "::set-output name=nomachine_url::$NGROK_URL"
+        id: ngrok_tunnel # এই স্টেপ থেকে আউটপুট পাওয়ার জন্য একটি আইডি দেওয়া হলো
+
+      - name: Keep alive
+        run: |
+          echo "NoMachine RDP is running. Connect using the URL above."
+          echo "This job will run for 6 hours unless manually stopped."
+          sleep 21600 # 6 ঘন্টা (6 * 60 * 60 = 21600 সেকেন্ড) ধরে চালু রাখবে
