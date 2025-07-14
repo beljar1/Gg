@@ -25,7 +25,7 @@ jobs:
         pip install -r requirements.txt
         sudo apt-get update && sudo apt-get install -y jq # Install jq for parsing JSON
 
-    - name: Install and configure ngrok
+    - name: Install ngrok
       run: |
         # Download ngrok zip file
         curl -s https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip -o ngrok.zip
@@ -49,11 +49,15 @@ jobs:
         # Make the ngrok executable runnable
         chmod +x ngrok
         
-        # Configure ngrok with the authtoken from GitHub Secrets
-        # This command directly applies the authtoken for the current session/environment.
-        ./ngrok authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
-        
-        echo "ngrok installation and configuration complete."
+        echo "ngrok installation complete."
+
+    - name: Configure ngrok authtoken
+      run: |
+        # Create the .ngrok2 directory in the home directory
+        mkdir -p ~/.ngrok2
+        # Write the authtoken to the ngrok.yml configuration file
+        echo "authtoken: ${{ secrets.NGROK_AUTH_TOKEN }}" > ~/.ngrok2/ngrok.yml
+        echo "Ngrok authtoken configured in ~/.ngrok2/ngrok.yml"
 
     - name: Start Bot with Ngrok
       env:
@@ -61,5 +65,5 @@ jobs:
         PORT: 8000 # Default port for webhook, can be configured in app.py or here
       run: |
         # Run the start_bot.sh script from the current working directory
-        # The script will now find ngrok in the current directory
+        # The script will now find ngrok in the current directory and use the configured authtoken
         bash start_bot.sh
