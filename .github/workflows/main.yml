@@ -1,44 +1,65 @@
-name: Deploy Telegram Bot # ওয়ার্কফ্লোর নাম
+name: Deploy Telegram Bot
 
 on:
-  push: # যখন কোড পুশ করা হবে
+  push:
     branches:
-      - main # শুধুমাত্র 'main' ব্রাঞ্চে পুশ করলে
-  workflow_dispatch: # ম্যানুয়ালি ওয়ার্কফ্লো চালানোর জন্য এই অপশনটি থাকবে
+      - main
+  workflow_dispatch: # Allows manual triggering
 
 jobs:
-  deploy: # 'deploy' নামের একটি কাজ
-    runs-on: ubuntu-latest # উবুন্টু অপারেটিং সিস্টেমে চলবে
+  deploy:
+    runs-on: ubuntu-latest
 
-    steps: # ধাপসমূহ
-    - name: Checkout code # গিটহাব রিপোজিটরি থেকে আপনার কোড চেকআউট করা হবে
+    steps:
+    - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Set up Python # পাইথন সেটআপ করা
+    - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.10' # পাইথনের 3.10 সংস্করণ ব্যবহার করা হবে
+        python-version: '3.10' # Or your preferred Python version
 
-    - name: Install dependencies # আপনার বটের জন্য প্রয়োজনীয় লাইব্রেরি এবং টুল ইনস্টল করা
-      run: | # একাধিক কমান্ড চালানোর জন্য
-        python -m pip install --upgrade pip # pip (পাইথন প্যাকেজ ইনস্টলার) আপডেট করা
-        pip install -r requirements.txt # আপনার 'requirements.txt' ফাইল থেকে সমস্ত পাইথন নির্ভরতা ইনস্টল করা
-        sudo apt-get update && sudo apt-get install -y jq # 'jq' টুল ইনস্টল করা, যা JSON ডেটা প্রসেস করতে কাজে লাগে
-
-    - name: Install and configure ngrok # ngrok ইনস্টল এবং কনফিগার করা
+    - name: Install dependencies
       run: |
-        wget https://bin.equinox.io/c/bNyj1mQVY4c/ngrok-v3-stable-linux-amd64.tgz # ngrok ডাউনলোড করা
-        tar -xvzf ngrok-v3-stable-linux-amd64.tgz # ডাউনলোড করা ফাইলটি এক্সট্রাক্ট করা
-        chmod +x ngrok # ngrok এক্সিকিউটেবল করা (চালানোর অনুমতি দেওয়া)
-        # আপনার ngrok অথেন্টিকেশন টোকেন যোগ করা।
-        # এটি আপনার GitHub রিপোজিটরির Secrets-এ 'NGROK_AUTH_TOKEN' নামে সেট করা থাকতে হবে।
-        ./ngrok config add-authtoken ${{ secrets.NGROK_AUTH_TOKEN }} 
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        sudo apt-get update && sudo apt-get install -y jq # Install jq for parsing JSON
 
-    - name: Start Bot with Ngrok # Ngrok ব্যবহার করে টেলিগ্রাম বটটি শুরু করা
-      # এই ধাপে, আমরা TELEGRAM_BOT_TOKEN এবং PORT ভেরিয়েবলগুলোকে
-      # সরাসরি 'start_bot.sh' স্ক্রিপ্টের এনভায়রনমেন্টে পাস করছি।
-      # 'TELEGRAM_BOT_TOKEN' আপনার GitHub রিপোজিটরির Secrets-এ সেট করা থাকতে হবে।
+    - name: Install and configure ngrok
       run: |
-        TELEGRAM_BOT_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}" \
-        PORT="8000" \
+        # Download ngrok zip file
+        curl -s https://bin.equinox.io/c/4VmDzA7iaHb/ngrok-stable-linux-amd64.zip -o ngrok.zip
+        
+        # Unzip ngrok.zip. The -o option overwrites existing files without prompting.
+        unzip -o ngrok.zip
+        
+        # Check if ngrok was unzipped into a subdirectory (e.g., ngrok-stable-linux-amd64/)
+        # If so, move the ngrok executable to the current directory
+        if [ -f "ngrok-stable-linux-amd64/ngrok" ]; then
+          mv ngrok-stable-linux-amd64/ngrok .
+          rm -rf ngrok-stable-linux-amd64 # Clean up the empty directory
+        fi
+        
+        # Verify that the ngrok executable is now in the current directory
+        if [ ! -f "ngrok" ]; then
+          echo "Error: ngrok executable not found after unzipping or moving."
+          exit 1
+        fi
+        
+        # Make the ngrok executable runnable
+        chmod +x ngrok
+        
+        # Configure ngrok with the authtoken from GitHub Secrets
+        # This command directly applies the authtoken for the current session/environment.
+        ./ngrok authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
+        
+        echo "ngrok installation and configuration complete."
+
+    - name: Start Bot with Ngrok
+      env:
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        PORT: 8000 # Default port for webhook, can be configured in app.py or here
+      run: |
+        # Run the start_bot.sh script from the current working directory
+        # The script will now find ngrok in the current directory
         bash start_bot.sh
