@@ -22,9 +22,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def get_user_agent(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     ua = generate_us_user_agent()
-    await update.message.reply_text(f'Here is a random US-based user agent:
-
-`{ua}`', parse_mode='MarkdownV2')
+    await update.message.reply_text(f'Here is a random US-based user agent:\n\n`{ua}`', parse_mode='MarkdownV2')
 
 async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(update.message.text)
@@ -32,12 +30,13 @@ async def echo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 def main() -> None:
     TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
     if not TELEGRAM_BOT_TOKEN:
-        print("Error: TELEGRAM_BOT_TOKEN not found.")
+        print("Error: TELEGRAM_BOT_TOKEN not found in environment variables.")
         sys.exit(1)
 
     if len(sys.argv) < 2:
-        print("Error: Ngrok public URL not provided.")
+        print("Error: Ngrok public URL not provided as a command-line argument.")
         sys.exit(1)
+
     NGROK_PUBLIC_URL = sys.argv[1]
     PORT = int(os.getenv("PORT", "8000"))
 
@@ -48,7 +47,6 @@ def main() -> None:
 
     webhook_path = f"/telegram-bot/{TELEGRAM_BOT_TOKEN}"
     full_webhook_url = f"{NGROK_PUBLIC_URL}{webhook_path}"
-
     print(f"Setting webhook to: {full_webhook_url}")
 
     application.run_webhook(
