@@ -27,8 +27,7 @@ jobs:
 
     - name: Install and configure ngrok
       run: |
-        curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.zip -o ngrok.zip
-        unzip ngrok.zip
+        ngrok config add-authtoken 2zZls9KgcCSFbsfkb4ngCLEnDZl_58JwwsrtN1YHF36BEaXRJ
         chmod +x ngrok
         ./ngrok authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
 
